@@ -1,0 +1,1306 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>품사 금고 탈출 · CHAESSAEM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;900&family=Gaegu:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* 지하 연구소 톤: 밝은/어두운 뷰어 모두에서 같은 분위기를 유지하도록 토큰을 어둡게 통일 */
+  :root{
+    --bg:#0a0e13; --panel:#141c26; --ink:#eae6dc; --muted:#8f98a6; --line:#26313f;
+    --coral:#E8604C; --coral-soft:rgba(232,96,76,.15); --gold:#E9B44C; --blue:#4A90D9; --green:#5CB85C; --purple:#9B6FCE;
+    --ok:#48c38a; --ok-soft:rgba(72,195,138,.14); --bad:#ff6b6b; --bad-soft:rgba(255,107,107,.15);
+    --chip:#1a2431; --chip-sel:#2b2421; --shadow:0 10px 30px rgba(0,0,0,.5);
+    --paper:#f3ead3; --paper-ink:#3b2f1d;
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+  }
+  html{ scroll-padding-top:env(safe-area-inset-top,0px); }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#0a0e13; --panel:#141c26; --ink:#eae6dc; --muted:#8f98a6; --line:#26313f;
+      --chip:#1a2431; --chip-sel:#2b2421; --shadow:0 10px 30px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0a0e13; --panel:#141c26; --ink:#eae6dc; --muted:#8f98a6; --line:#26313f;
+    --chip:#1a2431; --chip-sel:#2b2421; --shadow:0 10px 30px rgba(0,0,0,.5);
+  }
+  *{ box-sizing:border-box; }
+  body{
+    margin:0; font-family:'Noto Sans KR',system-ui,-apple-system,'Segoe UI',sans-serif;
+    background:var(--bg); color:var(--ink); line-height:1.55; min-height:100%;
+    -webkit-tap-highlight-color:transparent;
+  }
+  /* 조명 효과 */
+  body::before{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+    background:
+      radial-gradient(ellipse 55% 38% at 50% -6%, rgba(233,180,76,.24), transparent 70%),
+      radial-gradient(ellipse 80% 40% at 50% 115%, rgba(232,96,76,.10), transparent 60%);
+    animation:flicker 7s infinite;
+  }
+  body::after{
+    content:''; position:fixed; inset:0; pointer-events:none; z-index:40;
+    background:radial-gradient(ellipse at center, transparent 55%, rgba(0,0,0,.6) 100%);
+  }
+  @keyframes flicker{ 0%,40%,48%,76%,100%{ opacity:1; } 42%{ opacity:.55; } 44%{ opacity:1; } 46%{ opacity:.7; } 78%{ opacity:.8; } }
+  .wrap{ position:relative; z-index:1; max-width:920px; margin:0 auto; padding:0 16px 56px; }
+
+  /* 상단 바 */
+  .topbar{
+    position:sticky; top:env(safe-area-inset-top,0px); z-index:30;
+    background:rgba(10,14,19,.92); backdrop-filter:blur(6px);
+    padding:10px 0; display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap;
+    border-bottom:1px solid var(--line);
+  }
+  .brand{ display:flex; flex-direction:column; line-height:1.15; }
+  .bmark{ font-size:11px; letter-spacing:.16em; font-weight:700; color:var(--coral); }
+  .btitle{ font-size:17px; font-weight:900; }
+  .stats{ display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; align-items:center; }
+  .pill{ background:var(--panel); border:1px solid var(--line); border-radius:999px; padding:5px 11px; font-size:13px; font-weight:500; color:var(--ink); font:inherit; font-size:13px; }
+  button.pill{ cursor:pointer; }
+  .pill.time{ border-color:var(--gold); color:var(--gold); font-weight:700; }
+  .pill.time.danger{ border-color:var(--bad); color:var(--bad); animation:pulse 1s infinite; }
+  @keyframes pulse{ 0%,100%{ box-shadow:0 0 0 0 rgba(255,107,107,.0); } 50%{ box-shadow:0 0 14px 2px rgba(255,107,107,.55); } }
+
+  /* 진행 표시 */
+  .track{ display:flex; gap:6px; margin:16px 0 10px; }
+  .node{ flex:1; text-align:center; font-size:12px; color:var(--muted); }
+  .node .dot{ height:6px; border-radius:99px; background:var(--line); margin-bottom:5px; }
+  .node .ic{ font-size:16px; display:block; margin-bottom:2px; filter:grayscale(1) opacity(.5); }
+  .node.done{ color:var(--ok); } .node.done .dot{ background:var(--ok); } .node.done .ic{ filter:none; }
+  .node.cur{ color:var(--gold); font-weight:700; } .node.cur .dot{ background:var(--gold); box-shadow:0 0 10px var(--gold); } .node.cur .ic{ filter:none; }
+
+  /* 카드 (금고 패널) */
+  .card{
+    position:relative; border:1px solid var(--line); border-radius:20px; box-shadow:var(--shadow); padding:22px; margin-top:12px;
+    background:
+      radial-gradient(circle at 14px 14px, #46536a 3px, transparent 4px),
+      radial-gradient(circle at calc(100% - 14px) 14px, #46536a 3px, transparent 4px),
+      radial-gradient(circle at 14px calc(100% - 14px), #46536a 3px, transparent 4px),
+      radial-gradient(circle at calc(100% - 14px) calc(100% - 14px), #46536a 3px, transparent 4px),
+      linear-gradient(180deg, #172130, var(--panel));
+  }
+  .lock-head{ display:flex; gap:14px; align-items:center; margin-bottom:10px; }
+  .lockno{ flex:none; width:48px; height:48px; border-radius:14px; background:linear-gradient(145deg,#f4cf7a,#c48a1f); color:#3a2705; display:flex; align-items:center; justify-content:center; font-size:22px; font-weight:900; box-shadow:inset 0 -3px 0 rgba(0,0,0,.2), 0 0 14px rgba(233,180,76,.35); }
+  h1,h2,h3{ margin:0; }
+  h2{ font-size:20px; }
+  .sub{ margin:2px 0 0; color:var(--muted); font-size:14px; }
+  .story{ background:var(--coral-soft); border-left:3px solid var(--coral); border-radius:10px; padding:10px 14px; font-size:14px; margin:10px 0 14px; }
+  .mission{ margin:10px 0 14px; font-size:15px; }
+  .actions{ display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+  .btn{ font:inherit; font-weight:700; font-size:16px; padding:12px 20px; border-radius:14px; border:1.5px solid var(--line); background:var(--chip); color:var(--ink); cursor:pointer; }
+  .btn.primary{ background:var(--coral); border-color:var(--coral); color:#fff; box-shadow:0 0 18px rgba(232,96,76,.35); }
+  .btn:disabled{ opacity:.35; cursor:not-allowed; box-shadow:none; }
+  .spacer{ flex:1; }
+  .muted{ color:var(--muted); font-size:14px; }
+
+  .msg{ margin-top:14px; padding:10px 14px; border-radius:12px; font-size:14px; font-weight:500; }
+  .msg.bad{ background:var(--bad-soft); color:var(--bad); }
+  .msg.warn{ background:var(--coral-soft); color:#ff9a89; }
+  .hints{ margin-top:10px; }
+  .hint{ background:rgba(233,180,76,.12); border-left:3px solid var(--gold); border-radius:8px; padding:8px 12px; font-size:14px; margin-top:6px; }
+
+  /* 쪽지 */
+  .memo-wrap{ background:transparent; border:none; box-shadow:none; padding:10px 0; }
+  .memo-wrap.card{ background:none; }
+  .memo{
+    position:relative; max-width:560px; margin:14px auto 0; padding:34px 28px 24px; transform:rotate(-1.2deg);
+    background:
+      repeating-linear-gradient(transparent 0 33px, rgba(90,60,20,.13) 33px 34px),
+      var(--paper);
+    color:var(--paper-ink); font-family:'Gaegu','Noto Sans KR',cursive; font-size:23px; line-height:34px;
+    box-shadow:0 14px 34px rgba(0,0,0,.6); border-radius:4px;
+    animation:memoin .5s ease both;
+  }
+  @keyframes memoin{ from{ opacity:0; transform:translateY(20px) rotate(-4deg); } to{ opacity:1; transform:translateY(0) rotate(-1.2deg); } }
+  .memo .tape{ position:absolute; top:-12px; left:50%; width:110px; height:28px; transform:translateX(-50%) rotate(2deg); background:rgba(233,180,76,.55); }
+  .memo .mtitle{ font-weight:700; font-size:20px; color:#8a4a2c; letter-spacing:.04em; }
+  .memo p{ margin:0 0 4px; }
+  .memo .sign{ text-align:right; font-weight:700; color:#8a4a2c; }
+  .place{ text-align:center; color:var(--muted); font-size:12px; letter-spacing:.16em; }
+
+  /* 자물쇠 SVG */
+  .padwrap{ display:flex; justify-content:center; }
+  .padlock{ width:120px; height:140px; overflow:visible; filter:drop-shadow(0 0 18px rgba(233,180,76,.45)); }
+  .padlock .body{ transform-box:fill-box; transform-origin:center; animation:clank .32s ease both; }
+  .padlock .shackle{ transform-box:view-box; transform-origin:85px 62px; animation:shackleopen .7s .32s cubic-bezier(.3,1.4,.5,1) both; }
+  @keyframes clank{ 0%{ transform:translate(0,0); } 20%{ transform:translate(-3px,2px) rotate(-2deg); } 45%{ transform:translate(3px,-2px) rotate(2deg); } 70%{ transform:translate(-2px,1px); } 100%{ transform:translate(0,0); } }
+  @keyframes shackleopen{ 0%{ transform:translateY(0) rotate(0); } 45%{ transform:translateY(-20px) rotate(0); } 100%{ transform:translateY(-20px) rotate(-38deg); } }
+  .padlock.closed .body, .padlock.closed .shackle{ animation:none; }
+
+  /* 글자 공개 */
+  .reveal{ text-align:center; padding:22px 22px 18px; }
+  .bigletter{ display:inline-flex; min-width:120px; height:120px; padding:0 20px; align-items:center; justify-content:center; font-size:64px; font-weight:900; color:#3a2705; background:linear-gradient(145deg,#f7d98a,#d69a24); border-radius:28px; box-shadow:0 0 34px rgba(233,180,76,.55); animation:pop .55s 1s both; margin-top:6px; }
+  @keyframes pop{ 0%{ transform:scale(.2) rotate(-14deg); opacity:0; } 70%{ transform:scale(1.12) rotate(3deg); opacity:1; } 100%{ transform:scale(1); opacity:1; } }
+  .fadein{ animation:fade .5s 1.45s both; }
+  @keyframes fade{ from{ opacity:0; transform:translateY(8px); } to{ opacity:1; transform:none; } }
+  .reveal h2{ margin:16px 0 4px; font-size:22px; }
+  .letterbox{ display:flex; gap:8px; justify-content:center; margin:16px 0; }
+  .lb{ width:48px; height:48px; border-radius:12px; border:2px dashed var(--line); display:flex; align-items:center; justify-content:center; font-size:24px; font-weight:900; color:var(--muted); }
+  .lb.on{ border-style:solid; border-color:var(--gold); color:var(--gold); box-shadow:0 0 10px rgba(233,180,76,.3); }
+  .recap{ text-align:left; background:var(--chip); border:1px solid var(--line); border-radius:14px; padding:12px 14px; margin-top:14px; font-size:14px; }
+  .recap b{ color:var(--gold); }
+  .rline{ margin:4px 0; }
+
+  /* 금고 문 */
+  .vaultscene{ perspective:900px; display:flex; justify-content:center; position:relative; height:220px; margin-bottom:6px; }
+  .vaultglow{ position:absolute; top:10px; width:200px; height:200px; border-radius:50%; background:radial-gradient(circle, #ffe9a6 0%, #e9b44c 40%, transparent 72%); animation:glowin 1s 1.1s both; }
+  .vaultdoor{ position:relative; width:200px; height:200px; transform-origin:left center; animation:doorswing 1.3s 1.2s ease-in-out forwards; }
+  .vaultdoor svg{ width:200px; height:200px; }
+  .wheel{ transform-box:view-box; transform-origin:100px 100px; animation:spinwheel 1.1s ease-in-out both; }
+  @keyframes spinwheel{ from{ transform:rotate(0); } to{ transform:rotate(540deg); } }
+  @keyframes doorswing{ from{ transform:rotateY(0); } to{ transform:rotateY(-78deg); } }
+  @keyframes glowin{ from{ opacity:0; transform:scale(.4); } to{ opacity:1; transform:scale(1); } }
+  .vaultstatic{ display:flex; justify-content:center; }
+  .vaultstatic svg{ width:170px; height:170px; filter:drop-shadow(0 0 22px rgba(232,96,76,.35)); animation:breathe 3s ease-in-out infinite; }
+  @keyframes breathe{ 0%,100%{ filter:drop-shadow(0 0 10px rgba(232,96,76,.2)); } 50%{ filter:drop-shadow(0 0 28px rgba(232,96,76,.6)); } }
+
+  /* 단어 자르기 */
+  .cutbox{ display:flex; flex-wrap:wrap; row-gap:30px; column-gap:0; align-items:center; justify-content:center; padding:30px 10px 20px; background:var(--chip); border:1px dashed var(--line); border-radius:16px; }
+  .unit{ display:inline-flex; align-items:center; white-space:nowrap; }
+  .cell{ min-width:42px; height:56px; padding:0 6px; display:inline-flex; align-items:center; justify-content:center; font-size:26px; font-weight:700; background:var(--panel); border:1.5px solid var(--line); border-radius:10px; }
+  .gap{ width:20px; height:56px; border:none; background:transparent; position:relative; cursor:pointer; padding:0; flex:none; }
+  .gap::after{ content:''; position:absolute; left:50%; top:6px; bottom:6px; border-left:2px dotted #4a586c; transform:translateX(-50%); }
+  .gap:hover::after{ border-left-color:var(--gold); }
+  .gap.cut{ width:32px; }
+  .gap.cut::after{ border-left:4px solid var(--coral); border-radius:2px; }
+  .gap.cut::before{ content:'✂'; position:absolute; top:-18px; left:50%; transform:translateX(-50%) rotate(90deg); font-size:14px; color:var(--coral); }
+  .gap.bad::after{ border-left-color:var(--bad); }
+  .counter{ margin-top:12px; text-align:center; font-weight:700; color:var(--muted); }
+  .counter b{ color:var(--gold); }
+
+  /* 형태 자물쇠 */
+  .wgrid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(150px,1fr)); gap:10px; }
+  .wcard{ border:1.5px solid var(--line); border-radius:14px; padding:10px; background:var(--chip); text-align:center; }
+  .wcard .w{ font-size:22px; font-weight:900; margin-bottom:8px; }
+  .seg{ display:flex; gap:6px; }
+  .seg button{ flex:1; font:inherit; font-size:13px; font-weight:700; padding:9px 4px; border-radius:10px; border:1.5px solid var(--line); background:var(--panel); color:var(--muted); cursor:pointer; }
+  .seg button.on[data-v="불변어"]{ background:var(--blue); border-color:var(--blue); color:#fff; }
+  .seg button.on[data-v="가변어"]{ background:var(--coral); border-color:var(--coral); color:#fff; }
+
+  /* 분류 자물쇠 */
+  .pool{ display:flex; flex-wrap:wrap; gap:8px; padding:12px; min-height:64px; border:1px dashed var(--line); border-radius:14px; background:var(--chip); margin-bottom:14px; align-items:center; }
+  .chip{ font:inherit; font-weight:700; font-size:18px; padding:10px 16px; border-radius:12px; border:1.5px solid var(--line); background:var(--panel); color:var(--ink); cursor:pointer; }
+  .chip.sel{ border-color:var(--gold); background:var(--chip-sel); box-shadow:0 0 0 3px rgba(233,180,76,.25); }
+  .chip.placed{ font-size:15px; padding:6px 10px; }
+  .bins{ display:grid; gap:12px; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); }
+  .bins.bins9{ grid-template-columns:repeat(auto-fit,minmax(210px,1fr)); }
+  .bin{ border:2px dashed var(--line); border-radius:16px; padding:12px; background:var(--chip); min-height:104px; cursor:pointer; }
+  .bins.armed .bin{ border-color:var(--gold); }
+  .bn{ font-weight:900; color:var(--gold); font-size:17px; }
+  .bd{ font-size:12.5px; color:var(--muted); margin:4px 0 8px; }
+  .bchips{ display:flex; flex-wrap:wrap; gap:6px; }
+  .split-line{ text-align:center; font-size:18px; font-weight:700; padding:12px; background:var(--chip); border:1px dashed var(--line); border-radius:14px; margin-bottom:12px; }
+
+  /* 암호 */
+  .slots{ display:flex; gap:10px; justify-content:center; margin:18px 0; }
+  .slot{ width:72px; height:72px; border:2.5px dashed #4a586c; border-radius:18px; display:flex; align-items:center; justify-content:center; font-size:36px; font-weight:900; background:var(--chip); cursor:pointer; }
+  .slot.filled{ border-style:solid; border-color:var(--gold); color:var(--gold); box-shadow:0 0 14px rgba(233,180,76,.3); }
+  .tiles{ display:flex; gap:10px; justify-content:center; }
+  .tile{ width:64px; height:64px; font:inherit; font-size:30px; font-weight:900; border-radius:16px; border:none; background:linear-gradient(145deg,#f7d98a,#d69a24); color:#3a2705; cursor:pointer; }
+  .tile.used{ opacity:.2; pointer-events:none; }
+  .clue{ text-align:center; background:rgba(233,180,76,.12); border-radius:14px; padding:10px 14px; font-size:15px; }
+
+  /* 분석표 */
+  .tbl{ display:grid; gap:10px; margin-top:6px; }
+  .trow{ display:grid; grid-template-columns:100px 1fr 1fr 1fr; gap:8px; align-items:center; padding:10px; border:1px solid var(--line); border-radius:14px; background:var(--chip); }
+  .trow.head{ font-size:12px; color:var(--muted); border:none; background:none; padding:0 10px; }
+  .tw{ font-weight:900; font-size:20px; }
+  select{ font:inherit; font-size:15px; padding:10px 8px; border-radius:10px; border:1.5px solid var(--line); background:var(--panel); color:var(--ink); width:100%; }
+  select.bad{ border-color:var(--bad); background:#ffd9d4; color:#1a1a1a; font-weight:700; }
+  select.bad option{ background:#ffd9d4; color:#1a1a1a; }
+  @media (max-width:640px){
+    .trow{ grid-template-columns:1fr 1fr 1fr; }
+    .trow .tw{ grid-column:1/-1; }
+    .trow.head{ display:none; }
+  }
+
+  /* 시작/결과 */
+  .hero{ text-align:center; padding:28px 22px; }
+  .hero h1{ font-size:32px; margin:10px 0 6px; text-shadow:0 0 18px rgba(232,96,76,.45); animation:flicker 5s infinite; }
+  .hero p{ margin:8px auto; max-width:580px; }
+  .steps{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin:18px 0; text-align:center; }
+  .step{ background:var(--chip); border:1px solid var(--line); border-radius:14px; padding:10px 12px; font-size:14px; }
+  .step b{ color:var(--gold); }
+  input[type="text"]{ font:inherit; font-size:16px; padding:12px 14px; border-radius:12px; border:1.5px solid var(--line); background:var(--chip); color:var(--ink); width:min(320px,100%); text-align:center; }
+  .rstats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(120px,1fr)); gap:10px; margin:18px 0; }
+  .rs{ background:var(--chip); border:1px solid var(--line); border-radius:16px; padding:14px 8px; }
+  .rs .n{ font-size:26px; font-weight:900; color:var(--gold); }
+  .rs .l{ font-size:12px; color:var(--muted); }
+  .stars{ font-size:34px; letter-spacing:4px; }
+  details{ text-align:left; margin-top:14px; background:var(--chip); border:1px solid var(--line); border-radius:14px; padding:10px 14px; }
+  summary{ cursor:pointer; font-weight:700; }
+  table.sum{ width:100%; border-collapse:collapse; margin-top:10px; font-size:14px; }
+  table.sum th, table.sum td{ border-bottom:1px solid var(--line); padding:6px 8px; text-align:left; }
+
+  /* 단서 노트 */
+  .sheet{ position:fixed; inset:0; z-index:150; background:rgba(0,0,0,.72); overflow:auto; padding:calc(env(safe-area-inset-top,0px) + 14px) 12px calc(env(safe-area-inset-bottom,0px) + 24px); display:flex; justify-content:center; align-items:flex-start; }
+  .notebook{
+    position:relative; width:100%; max-width:640px; padding:22px 20px 20px 34px; border-radius:6px 16px 16px 6px;
+    background:repeating-linear-gradient(transparent 0 31px, rgba(90,60,20,.12) 31px 32px), var(--paper);
+    border-left:16px solid #7b3f2b; color:var(--paper-ink); font-family:'Gaegu','Noto Sans KR',cursive; font-size:19px; line-height:32px;
+    box-shadow:0 20px 50px rgba(0,0,0,.7); animation:memoin .35s ease both;
+  }
+  .notebook h2{ font-size:26px; color:#8a4a2c; }
+  .notebook h3{ font-size:20px; margin:14px 0 2px; color:#8a4a2c; border-bottom:2px solid rgba(138,74,44,.35); }
+  .notebook .lb{ border-color:rgba(60,40,10,.35); color:rgba(60,40,10,.4); }
+  .notebook .lb.on{ border-color:#b3761a; color:#b3761a; box-shadow:none; }
+  .notebook .letterbox{ justify-content:flex-start; margin:8px 0; }
+  .notebook .nm{ line-height:26px; margin:6px 0; font-size:17px; }
+  .notebook .nm b{ color:#8a4a2c; }
+  .notebook .empty{ color:rgba(60,40,10,.5); font-size:17px; }
+  .notebook .rline b{ color:#8a4a2c; }
+  .notebook textarea{ width:100%; min-height:110px; font:inherit; font-size:19px; line-height:32px; background:transparent; border:1px dashed rgba(90,60,20,.4); border-radius:8px; color:var(--paper-ink); padding:6px 10px; resize:vertical; }
+  .notebook .btn{ background:#7b3f2b; color:#fff; border:none; }
+
+  /* 시간 초과 */
+  .alarm{ position:fixed; inset:0; z-index:200; background:rgba(45,0,0,.9); display:flex; align-items:center; justify-content:center; text-align:center; padding:20px; overflow:hidden; animation:redflash 1s infinite alternate; }
+  .alarm::before{ content:''; position:absolute; inset:-60%; background:conic-gradient(from 0deg, rgba(255,60,60,.55), transparent 16%, transparent 50%, rgba(255,60,60,.55) 50%, transparent 66%); animation:spin 2.2s linear infinite; }
+  @keyframes spin{ to{ transform:rotate(360deg); } }
+  @keyframes redflash{ from{ background:rgba(45,0,0,.92); } to{ background:rgba(90,0,0,.86); } }
+  .alarm .box{ position:relative; max-width:460px; }
+  .alarm h1{ font-size:40px; color:#ff6b6b; text-shadow:0 0 22px #ff2b2b; }
+  .alarm p{ font-size:16px; }
+  .alarm .actions{ justify-content:center; }
+
+
+  /* 문장 편집 */
+  .tabs{ display:flex; gap:8px; margin:10px 0; flex-wrap:wrap; }
+  .tab{ font:inherit; font-weight:700; padding:10px 16px; border-radius:12px; border:1.5px solid var(--line); background:var(--chip); color:var(--muted); cursor:pointer; }
+  .tab.on{ border-color:var(--gold); color:var(--gold); box-shadow:0 0 12px rgba(233,180,76,.25); }
+  .gap.forced{ display:inline-block; cursor:default; pointer-events:none; }
+  .gap.forced::after{ border-left-color:var(--gold); }
+  .gap.forced::before{ content:''; }
+  .msg.ok{ background:var(--ok-soft); color:var(--ok); }
+  .row2{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin:10px 0; }
+  .row2 select{ width:auto; flex:1; min-width:200px; }
+  input.txt{ width:100%; text-align:left; }
+  textarea.code{ width:100%; min-height:72px; font:inherit; font-size:13px; background:var(--chip); color:var(--ink); border:1.5px solid var(--line); border-radius:10px; padding:8px 10px; word-break:break-all; }
+  .saved{ display:flex; gap:8px; align-items:center; justify-content:space-between; padding:8px 12px; border:1px solid var(--line); border-radius:10px; margin-top:6px; background:var(--chip); }
+  .cursent{ text-align:left; background:var(--chip); border:1px solid var(--line); border-radius:14px; padding:10px 14px; margin:14px 0; font-size:15px; }
+  .cursent b{ color:var(--gold); }
+  .badge{ display:inline-block; font-size:11px; padding:2px 8px; border-radius:99px; background:var(--coral-soft); color:#ff9a89; margin-left:6px; }
+  label.opt{ display:flex; gap:8px; align-items:center; font-size:14px; margin:10px 0; }
+  .h3s{ margin:18px 0 6px; font-size:16px; color:var(--gold); }
+
+  @media (prefers-reduced-motion: reduce){ *{ animation:none !important; transition:none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="app"></div>
+</div>
+
+<script>
+'use strict';
+
+/* ================= 데이터 ================= */
+/* ---- 품사 매핑 & 문장 빌더 ---- */
+const MEAN_MAP = {
+  '명사':['체언','불변어'], '대명사':['체언','불변어'], '수사':['체언','불변어'],
+  '동사':['용언','가변어'], '형용사':['용언','가변어'],
+  '관형사':['수식언','불변어'], '부사':['수식언','불변어'],
+  '조사':['관계언','불변어'], '감탄사':['독립언','불변어'],
+};
+function defaultsFor(mean, w){
+  const m = MEAN_MAP[mean]; if (!m) return { func:'', form:'' };
+  let form = m[1];
+  if (mean === '조사' && /이다$/.test(w)) form = '가변어';   // 서술격 조사 ‘이다’는 형태가 변함
+  return { func:m[0], form };
+}
+// text: 문장, words: [[단어, 의미(품사), (기능), (형태)], ...]
+function buildSentence(text, words, hints){
+  const clean = text.trim().replace(/\s+/g,' ');
+  const eoj = clean.split(' ').filter(Boolean);
+  const queue = words.map(x => {
+    const d = defaultsFor(x[1], x[0]);
+    return { w:x[0], mean:x[1], func:x[2] || d.func, form:x[3] || d.form };
+  });
+  let qi = 0; const eojeol = [];
+  for (const e of eoj){
+    const chars = [...e.replace(PUNCT,'')];
+    let need = chars.length; const ws = [];
+    while (need > 0){
+      const q = queue[qi];
+      if (!q) throw new Error('단어 목록이 문장보다 짧아요.');
+      const len = [...q.w].length;
+      if (len > need) throw new Error(`‘${q.w}’ 단어가 띄어쓰기를 넘어가요.`);
+      ws.push(q.w); need -= len; qi++;
+    }
+    if (ws.join('') !== chars.join('')) throw new Error('단어와 문장의 글자가 달라요.');
+    eojeol.push({ t:e, w:ws });
+  }
+  if (qi !== queue.length) throw new Error('단어 목록이 문장보다 길어요.');
+  return { text:clean, eojeol, words:queue, hints };
+}
+function checkConsistency(words){
+  for (const x of words){
+    const m = MEAN_MAP[x.mean];
+    if (!m) return `‘${x.w}’의 의미(품사)를 골라 주세요.`;
+    const d = defaultsFor(x.mean, x.w);
+    if (x.func !== d.func) return `‘${x.w}’: ${x.mean}은(는) ${d.func}이에요. 기능을 다시 확인해 주세요.`;
+    if (x.form !== d.form) return `‘${x.w}’: ${x.mean}의 형태는 ${d.form}예요. 형태를 다시 확인해 주세요.`;
+  }
+  return null;
+}
+
+/* ---- 기본 문장 ---- */
+const DEFAULT_DEFS = {
+  main: { text:'어머, 너희 둘이 새 신발을 사다니 정말 부러워.',
+    words:[['어머','감탄사'],['너희','대명사'],['둘','수사'],['이','조사'],['새','관형사'],['신발','명사'],['을','조사'],['사다니','동사'],['정말','부사'],['부러워','형용사']] },
+  scan: { text:'와! 우리가 새 열쇠를 드디어 찾았어.',
+    words:[['와','감탄사'],['우리','대명사'],['가','조사'],['새','관형사'],['열쇠','명사'],['를','조사'],['드디어','부사'],['찾았어','동사']] },
+};
+const DEFAULT_HINTS_MAIN = {
+  l1: ['이 문장의 단어는 모두 10개예요.',
+       '조사 ‘이’, ‘을’은 앞말에서 떼어 따로 나눠요. 하지만 ‘사다니’처럼 어미가 붙은 말은 나누지 않아요.'],
+  l2: ['‘사다’가 ‘사고, 사서, 사다니’처럼 문장에서 형태가 바뀌는 것을 떠올려 봐요.',
+       '형태가 변하는 단어(가변어)는 모두 2개예요. 움직임이나 상태를 나타내는 말이에요.'],
+  l3: ['‘을’처럼 앞말과 다른 말의 관계를 이어 주는 단어는 어디에 들어갈까요?',
+       '‘어머’는 다른 단어와 상관없이 독립적으로 쓰이는 단어예요.'],
+  l4: ['‘새’는 체언(신발)을 꾸미고, ‘정말’은 용언(부러워)을 꾸며요.',
+       '‘너희’는 사람을 대신 가리키고, ‘둘’은 수량을 나타내요.'],
+};
+const DEFAULT_HINTS_SCAN = {
+  scanCut: ['단어는 모두 8개예요.', '조사 ‘가’, ‘를’은 앞말에서 떼어요.'],
+  scanTable: ['‘새’는 체언(열쇠)을 꾸미고, ‘드디어’는 용언(찾았어)을 꾸며요.',
+              '형태가 변하는 단어는 1개예요. ‘찾았어’는 ‘찾다’가 형태를 바꾼 말이에요.'],
+};
+const FORMS = ['불변어','가변어'];
+const FUNC_BINS = [
+  {name:'체언',   def:'주어, 목적어 등으로 두루 쓰여 문장의 뼈대 역할을 하는 단어'},
+  {name:'용언',   def:'주어를 서술하는 역할을 하는 단어'},
+  {name:'수식언', def:'다른 말을 꾸며 주는 역할을 하는 단어'},
+  {name:'관계언', def:'문장에서 다른 말과의 관계를 나타내는 역할을 하는 단어'},
+  {name:'독립언', def:'문장에서 다른 단어에 얽매이지 않고 독립적으로 쓰이는 단어'},
+];
+const MEAN_BINS = [
+  {name:'명사',   def:'대상의 이름을 나타내는 단어'},
+  {name:'대명사', def:'사람, 사물, 장소 등의 이름을 대신하여 가리키는 단어'},
+  {name:'수사',   def:'수량이나 순서를 나타내는 단어'},
+  {name:'동사',   def:'사람이나 사물의 움직임을 나타내는 단어'},
+  {name:'형용사', def:'사람이나 사물의 성질이나 상태를 나타내는 단어'},
+  {name:'관형사', def:'체언을 꾸며 주는 단어'},
+  {name:'부사',   def:'주로 용언을 꾸며 주는 단어'},
+  {name:'조사',   def:'주로 체언 뒤에 붙어 그 말과 다른 말의 문법적 관계를 나타내거나 뜻을 더해 주는 단어'},
+  {name:'감탄사', def:'느낌, 부름, 대답 등을 나타내는 단어'},
+];
+const LETTERS = { l1:'열', l2:'품', l3:'쇠', l4:'사' };
+const CODE = '품사열쇠';
+const LIMIT = 20 * 60;
+
+const CODE_HINTS = ['암호는 ‘단어의 갈래 이름(두 글자)’ + ‘잠금을 여는 도구(두 글자)’ 형태예요.', '첫 글자는 ‘품’이에요.'];
+function genHints(key, s){
+  const ws = s.words, n = ws.length, cnt = f => ws.filter(w => w.mean === f).length;
+  const cf = f => ws.filter(w => w.func === f).length;
+  const kinds = [...new Set(ws.map(w => w.mean))].join(', ');
+  const var_ = ws.filter(w => w.form === '가변어').length;
+  if (key === 'l1' || key === 'scanCut'){
+    const josa = ws.filter(w => w.mean === '조사'), verb = ws.find(w => w.mean === '동사' || w.mean === '형용사');
+    return [`이 문장의 단어는 모두 ${n}개예요.`,
+      `조사${josa.length ? '(예: ' + josa.slice(0,3).map(w => w.w).join('·') + ')' : ''}는 앞말에서 떼어 따로 나눠요. 하지만 어미가 붙은 말${verb ? '(예: ' + verb.w + ')' : ''}은 나누지 않아요.`];
+  }
+  if (key === 'l2') return ['형태가 변하는 단어를 가변어라고 해요. 동사·형용사처럼 문장에서 형태가 바뀌는 말을 떠올려 봐요.',
+      var_ ? `가변어는 모두 ${var_}개예요.` : '이 문장에는 가변어가 하나도 없어요.'];
+  if (key === 'l3') return [`체언 ${cf('체언')}개, 용언 ${cf('용언')}개, 수식언 ${cf('수식언')}개, 관계언 ${cf('관계언')}개, 독립언 ${cf('독립언')}개예요.`,
+      '문장의 뼈대가 되는 단어는 체언, 다른 말을 꾸며 주는 단어는 수식언, 주어를 서술하는 단어는 용언이에요.'];
+  if (key === 'l4') return [`이 문장에는 ${kinds}이(가) 들어 있어요.`, `조사는 ${cnt('조사')}개, 명사는 ${cnt('명사')}개예요.`];
+  return [`이 문장에는 ${kinds}이(가) 들어 있어요.`, var_ ? `형태가 변하는 단어(가변어)는 ${var_}개예요.` : '이 문장에는 가변어가 하나도 없어요.'];
+}
+function getHints(key){
+  if (key === 'code') return CODE_HINTS;
+  const s = key.startsWith('scan') ? SET.scan : SET.main;
+  return (s.hints && s.hints[key]) ? s.hints[key] : genHints(key, s);
+}
+const HINT_LABEL = { l1:'1번 단어', l2:'2번 형태', l3:'3번 기능', l4:'4번 의미', code:'암호', scanCut:'보안 1단계', scanTable:'보안 2단계' };
+
+const MEMOS = {
+  l1:{ title:'쪽지 1 · 단어 자물쇠', btn:'자물쇠 살펴보기 ▶', text:[
+    '탐정 여러분, 나는 품사 박사란다. 이 쪽지를 읽고 있다면 내가 금고 앞에서 사라진 뒤겠지? 금고 문에는 내가 남긴 문장이 새겨져 있어. 내 연구는 언제나 말을 ‘단어’ 단위로 나누는 것에서 시작했단다. 단어와 단어 사이에 가위를 대 보렴.' ]},
+  l2:{ title:'쪽지 2 · 형태 자물쇠', btn:'자물쇠 살펴보기 ▶', text:[
+    '첫 번째 자물쇠를 열었구나! 역시 내 눈은 틀리지 않았어. 다음은 형태 자물쇠란다. 문장 속에서 형태가 바뀌는 단어들이 있고, 바뀌지 않는 단어들이 있지. 그 기준이 바로 ‘형태’야.' ]},
+  l3:{ title:'쪽지 3 · 기능 자물쇠', btn:'자물쇠 살펴보기 ▶', text:[
+    '잘하고 있어! 하지만 시간이 얼마 없단다. 보안 시스템이 곧 금고를 완전히 잠글 거야. 이번에는 단어들이 문장 안에서 무슨 ‘기능’을 하는지 볼 차례야. 체언, 수식언, 독립언, 관계언, 용언… 다섯 개의 열쇠 구멍이 기다리고 있단다.' ]},
+  l4:{ title:'쪽지 4 · 의미 자물쇠', btn:'자물쇠 살펴보기 ▶', text:[
+    '마지막 자물쇠 앞에 섰구나. 단어가 나타내는 ‘뜻’으로 나누면 우리가 아는 품사 이름이 나온단다. 뜻풀이 구멍에 단어를 하나씩 넣어 보렴.' ]},
+  code:{ title:'쪽지 5 · 금고 이름표', btn:'암호판 살펴보기 ▶', text:[
+    '네 글자가 모두 모였구나! 내가 가장 아끼는 물건의 이름이 그 안에 숨어 있단다. 글자를 제자리에 놓아 금고 이름표 암호를 완성해 보렴.' ]},
+  scan:{ title:'쪽지 6 · 보안 스캐너', btn:'스캐너 앞으로 ▶', text:[
+    '문이 열렸다고 방심하면 안 돼. 금고 안에는 보안 스캐너가 있단다. 스캐너는 완벽한 분석만 통과시켜. 새 문장으로 마지막 시험을 보자꾸나. 행운을 빈다!' ]},
+};
+
+/* ================= 효과음 (WebAudio 합성) ================= */
+let AC = null, muted = false;
+function ac(){
+  if (muted) return null;
+  try {
+    if (!AC) AC = new (window.AudioContext || window.webkitAudioContext)();
+    if (AC.state === 'suspended') AC.resume();
+    return AC;
+  } catch(e){ return null; }
+}
+function tone(freq, dur, type, vol, when, slideTo){
+  const c = ac(); if (!c) return;
+  const t0 = c.currentTime + (when || 0);
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type || 'sine'; o.frequency.setValueAtTime(freq, t0);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t0 + dur);
+  g.gain.setValueAtTime(0.0001, t0);
+  g.gain.exponentialRampToValueAtTime(vol || .1, t0 + 0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g).connect(c.destination); o.start(t0); o.stop(t0 + dur + .02);
+}
+function noise(dur, vol, when, freq, q){
+  const c = ac(); if (!c) return;
+  const t0 = c.currentTime + (when || 0);
+  const len = Math.max(1, Math.floor(c.sampleRate * dur));
+  const buf = c.createBuffer(1, len, c.sampleRate), d = buf.getChannelData(0);
+  for (let i = 0; i < len; i++) d[i] = (Math.random()*2 - 1) * (1 - i/len);
+  const src = c.createBufferSource(); src.buffer = buf;
+  const f = c.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = freq || 1500; f.Q.value = q || 1;
+  const g = c.createGain(); g.gain.value = vol || .1;
+  src.connect(f).connect(g).connect(c.destination); src.start(t0);
+}
+const SFX = {
+  tap(){ tone(720, .05, 'triangle', .05); },
+  snip(){ noise(.07, .18, 0, 3500, 2); tone(1800, .04, 'square', .03); },
+  clank(){ noise(.16, .35, 0, 700, .8); tone(160, .22, 'square', .09); tone(80, .35, 'sine', .22, .04); noise(.12, .3, .16, 1200, 1); },
+  chime(){ [660, 880, 1320].forEach((f,i) => tone(f, .55, 'sine', .11, i*.12)); },
+  wrong(){ tone(180, .28, 'sawtooth', .09, 0, 110); tone(130, .3, 'sawtooth', .09, .14, 90); },
+  tick(){ tone(1100, .035, 'square', .035); },
+  alarm(){ for (let i = 0; i < 6; i++) tone(i % 2 ? 620 : 940, .26, 'square', .07, i*.3); },
+  rumble(){ noise(1.0, .28, 0, 140, .7); tone(70, 1.1, 'sawtooth', .1, 0, 45); },
+  win(){ [523, 659, 784, 1047, 1319].forEach((f,i) => tone(f, .45, 'triangle', .11, i*.12)); },
+  page(){ noise(.12, .12, 0, 2400, .6); },
+};
+
+/* ================= 유틸 ================= */
+const app = document.getElementById('app');
+const esc = s => String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const PUNCT = /[,.!?~…]/g;
+const fmt = sec => { sec = Math.max(0, sec); const m = Math.floor(sec/60), s = sec%60; return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); };
+
+function cellsOf(e){
+  const chars = [...e.t.replace(PUNCT,'')];
+  const tail = e.t.replace(/[^,.!?~…]/g,'');
+  return chars.map((c,i) => i === chars.length-1 ? c+tail : c);
+}
+function flatCells(data){
+  const cells = [];
+  data.eojeol.forEach(e => cellsOf(e).forEach(c => cells.push(c)));
+  return cells;
+}
+function reqCuts(data){
+  const s = new Set();
+  const ws = data.eojeol.flatMap(e => e.w);
+  let acc = 0;
+  ws.forEach((w,wi) => { acc += [...w].length; if (wi < ws.length-1) s.add(String(acc-1)); });
+  return s;
+}
+function checkCut(data, cut){
+  const req = reqCuts(data);
+  const extra = [...cut].filter(k => !req.has(k));
+  const missing = [...req].filter(k => !cut.has(k));
+  return { ok: !extra.length && !missing.length, extra:new Set(extra), missing };
+}
+function cutHTML(data, cut, bad){
+  const cells = flatCells(data);
+  return `<div class="cutbox">` + cells.map((c,i) => {
+    const k = String(i);
+    const gap = i < cells.length-1
+      ? `<button class="gap ${cut.has(k)?'cut':''} ${bad && bad.has(k)?'bad':''}" data-act="gap" data-k="${k}" aria-label="${esc(c)} 뒤에서 나누기"></button>` : '';
+    return `<span class="unit"><span class="cell">${esc(c)}</span>${gap}</span>`;
+  }).join('') + `</div>`;
+}
+function splitLine(words){ return words.map(x => esc(x.w)).join(' / '); }
+function defaultSet(){
+  const D = DEFAULT_DEFS;
+  return { main: buildSentence(D.main.text, D.main.words, DEFAULT_HINTS_MAIN),
+           scan: buildSentence(D.scan.text, D.scan.words, DEFAULT_HINTS_SCAN) };
+}
+let SET = defaultSet();
+
+/* ================= 상태 ================= */
+function fresh(team){
+  return {
+    screen:'intro', stage:'l1', memo:null, team: team || '', teacher:false,
+    start:0, end:0, timerId:null, timeout:false, timedOut:false, practice:false,
+    wrong:0, hints:0, hintIdx:{}, hintLog:[],
+    letters:[], done:{}, memosSeen:[], recaps:{}, notes:'', notebook:false,
+    msg:null, reveal:null,
+    cut1:new Set(), badCut:null,
+    form2:{},
+    s3:{place:{}, sel:null}, s4:{place:{}, sel:null},
+    code:{slots:[null,null,null,null]},
+    scan:{step:'cut', cut:new Set(), badCut:null, table:{}, bad:null},
+  };
+}
+let state = fresh();
+let lastTick = -1;
+
+function elapsedSec(){ return Math.floor((Date.now() - state.start)/1000); }
+function stopTimer(){ if (state.timerId){ clearInterval(state.timerId); state.timerId = null; } }
+function startTimer(keepStart){
+  stopTimer();
+  if (!keepStart) state.start = Date.now();
+  state.timerId = setInterval(tick, 250);
+}
+function tick(){
+  if (state.screen !== 'play') return;
+  const el = document.getElementById('timer'), pill = document.getElementById('timepill');
+  const e = elapsedSec();
+  if (state.practice){ if (el) el.textContent = fmt(e); return; }
+  const rem = LIMIT - e;
+  if (rem <= 0){ onTimeout(); return; }
+  if (el) el.textContent = fmt(rem);
+  if (pill) pill.classList.toggle('danger', rem <= 180);
+  if (rem <= 10 && rem !== lastTick){ lastTick = rem; SFX.tick(); }
+}
+function onTimeout(){
+  stopTimer(); state.timedOut = true; state.timeout = true; state.notebook = false;
+  SFX.alarm(); render();
+}
+function hintKey(){ return state.stage === 'scan' ? (state.scan.step === 'cut' ? 'scanCut' : 'scanTable') : state.stage; }
+function goMemo(key){
+  state.stage = key; state.memo = key;
+  if (!state.memosSeen.includes(key)) state.memosSeen.push(key);
+}
+
+/* ================= SVG ================= */
+function padlockSVG(){
+  return `<svg class="padlock" viewBox="0 0 120 140" aria-hidden="true">
+    <path class="shackle" d="M35 64 V42 a25 25 0 0 1 50 0 V64" fill="none" stroke="#cdd3dc" stroke-width="10" stroke-linecap="round"/>
+    <g class="body">
+      <rect x="18" y="60" width="84" height="70" rx="13" fill="#e0a83a"/>
+      <rect x="18" y="60" width="84" height="18" rx="10" fill="#f2c665" opacity=".6"/>
+      <circle cx="60" cy="90" r="9" fill="#4d3406"/><rect x="56" y="92" width="8" height="22" rx="3" fill="#4d3406"/>
+    </g></svg>`;
+}
+function vaultSVG(){
+  const bolts = [0,45,90,135,180,225,270,315].map(a => `<circle cx="${100+80*Math.cos(a*Math.PI/180)}" cy="${100+80*Math.sin(a*Math.PI/180)}" r="4.5" fill="#6d7b92"/>`).join('');
+  return `<svg viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="94" fill="#3a4556" stroke="#1b232e" stroke-width="8"/>
+    <circle cx="100" cy="100" r="72" fill="#2a3341" stroke="#55627a" stroke-width="3"/>
+    ${bolts}
+    <g class="wheel">
+      <circle cx="100" cy="100" r="30" fill="none" stroke="#E9B44C" stroke-width="7"/>
+      <line x1="100" y1="58" x2="100" y2="142" stroke="#E9B44C" stroke-width="7" stroke-linecap="round"/>
+      <line x1="58" y1="100" x2="142" y2="100" stroke="#E9B44C" stroke-width="7" stroke-linecap="round"/>
+      <line x1="70" y1="70" x2="130" y2="130" stroke="#E9B44C" stroke-width="5" stroke-linecap="round"/>
+      <line x1="130" y1="70" x2="70" y2="130" stroke="#E9B44C" stroke-width="5" stroke-linecap="round"/>
+      <circle cx="100" cy="100" r="9" fill="#E9B44C"/>
+    </g></svg>`;
+}
+function vaultClosedSVG(){
+  return `<svg viewBox="0 0 200 200" aria-hidden="true">
+    <circle cx="100" cy="100" r="94" fill="#3a4556" stroke="#1b232e" stroke-width="8"/>
+    <circle cx="100" cy="100" r="72" fill="#2a3341" stroke="#55627a" stroke-width="3"/>
+    <circle cx="100" cy="100" r="30" fill="none" stroke="#E8604C" stroke-width="7"/>
+    <line x1="100" y1="58" x2="100" y2="142" stroke="#E8604C" stroke-width="7" stroke-linecap="round"/>
+    <line x1="58" y1="100" x2="142" y2="100" stroke="#E8604C" stroke-width="7" stroke-linecap="round"/>
+    <circle cx="100" cy="100" r="9" fill="#E8604C"/>
+    <text x="100" y="188" text-anchor="middle" font-size="12" fill="#8f98a6" font-family="sans-serif" letter-spacing="3">LOCKED</text></svg>`;
+}
+
+/* ================= 화면 조각 ================= */
+function headerHTML(){
+  const play = state.screen === 'play';
+  const e = play ? elapsedSec() : 0;
+  const timePill = state.practice
+    ? `<span class="pill time">🧪 연습 <b id="timer">${fmt(e)}</b></span>`
+    : `<span class="pill time ${LIMIT-e<=180?'danger':''}" id="timepill">⏳ <b id="timer">${fmt(LIMIT-e)}</b></span>`;
+  return `<div class="topbar">
+    <div class="brand"><span class="bmark">CHAESSAEM · 지하 3층</span><span class="btitle">품사 금고 탈출</span></div>
+    <div class="stats">
+      ${play ? `${timePill}
+      <span class="pill">💡 ${state.hints}</span><span class="pill">✖ ${state.wrong}</span>
+      <button class="pill" data-act="notebook" aria-label="단서 노트 열기">📓 단서 노트</button>` : ''}
+      <button class="pill" data-act="mute" aria-label="효과음 켜기/끄기">${muted ? '🔇' : '🔊'}</button>
+    </div>
+  </div>`;
+}
+function trackHTML(){
+  const nodes = [['l1','단어'],['l2','형태'],['l3','기능'],['l4','의미'],['code','암호'],['scan','보안']];
+  return `<div class="track">` + nodes.map(([k,label]) => {
+    const cls = state.done[k] ? 'done' : (state.stage === k ? 'cur' : '');
+    return `<div class="node ${cls}"><span class="ic">${state.done[k] ? '🔓' : '🔒'}</span><div class="dot"></div>${label}</div>`;
+  }).join('') + `</div>`;
+}
+function msgHTML(){ return state.msg ? `<div class="msg ${state.msg.kind}" role="status">${esc(state.msg.text)}</div>` : ''; }
+function hintsHTML(key){
+  const H = getHints(key), used = state.hintIdx[key] || 0, total = H.length;
+  const list = H.slice(0, used).map(h => `<div class="hint">💡 ${esc(h)}</div>`).join('');
+  return { btn:`<button class="btn" data-act="hint" ${used>=total?'disabled':''}>💡 힌트 (${used}/${total})</button>`, list:`<div class="hints">${list}</div>` };
+}
+function lockHead(no, title){
+  return `<div class="lock-head"><span class="lockno">${no}</span><h2>${title}</h2></div>`;
+}
+
+function introHTML(){
+  return `<div class="card hero">
+    <div class="vaultstatic" data-act="teacher-toggle">${vaultClosedSVG()}</div>
+    <h1>품사 금고 탈출</h1>
+    <p>CHAESSAEM 연구소 지하 3층, 새벽 1시.<br> 갑작스러운 정전이 지나가고 <b>품사 박사</b>가 사라졌어요.<br>
+    남은 것은 굳게 잠긴 <b>‘품사 금고’</b>와 박사가 남긴 쪽지들뿐…</p>
+    <p><b style="color:var(--gold)">제한 시간 20분!</b><br> 자물쇠 4개를 풀고 비밀 글자를 모아<br> 금고를 열어 박사의 연구 노트를 찾아 주세요.</p>
+    <div class="steps">
+      <div class="step"><b>1번</b> 단어 자물쇠</div>
+      <div class="step"><b>2번</b> 형태 자물쇠</div>
+      <div class="step"><b>3번</b> 기능 자물쇠</div>
+      <div class="step"><b>4번</b> 의미 자물쇠</div>
+    </div>
+${state.teacher ? '<p><button class="btn" data-act="editor">📝 문장 바꾸기 (교사용)</button></p>' : ''}
+    <details><summary>선생님께 받은 세트 코드가 있나요?</summary>
+      <p class="muted">코드를 붙여 넣으면 선생님이 만든 문장으로 바뀌어요.</p>
+      <textarea class="code" id="codein" placeholder="세트 코드를 붙여 넣으세요">${esc(ED.codeIn || '')}</textarea>
+      <div class="actions"><button class="btn" data-act="import-code">코드 불러오기</button></div>
+      ${ED.importMsg ? `<div class="msg ${ED.importMsg.kind}">${esc(ED.importMsg.text)}</div>` : ''}
+    </details>
+    <p><input type="text" id="team" maxlength="12" placeholder="탐정단 이름을 적어 주세요" value="${esc(state.team)}" aria-label="모둠 이름"></p>
+    <p><button class="btn primary" data-act="start" style="font-size:18px;padding:14px 32px">탈출 시작 ▶</button></p>
+  </div>`;
+}
+
+function memoHTML(key){
+  const m = MEMOS[key];
+  return `<div class="memo-wrap card">
+    <div class="place">B3 · 금고실</div>
+    <div class="memo"><div class="tape"></div>
+      <div class="mtitle">${esc(m.title)}</div>
+      ${m.text.map(p => `<p>${esc(p)}</p>`).join('')}
+      <div class="sign">— 품사 박사</div>
+    </div>
+    <div class="actions" style="justify-content:center"><button class="btn primary" data-act="read-memo">${esc(m.btn)}</button></div>
+  </div>`;
+}
+
+function stageL1(){
+  const h = hintsHTML('l1');
+  return `<div class="card">
+    ${lockHead(1,'단어 자물쇠')}
+    <div class="story">금고 문에 새겨진 문장의 단어와 단어 사이를 잘라 내면 자물쇠가 풀려요.</div>
+    <p class="mission">모든 글자 사이에서 <b>가위선</b>을 넣을 수 있어요. 탭하면 잘리고, 다시 탭하면 붙어요.</p>
+    ${cutHTML(SET.main, state.cut1, state.badCut)}
+    <div class="counter">지금 나눈 단어 <b>${state.cut1.size + 1}</b>개</div>
+    <div class="actions">
+      <button class="btn" data-act="clear-cut" data-scope="l1">가위선 모두 지우기</button>
+      ${h.btn}<span class="spacer"></span>
+      <button class="btn primary" data-act="check-l1">자물쇠 열기 🔓</button>
+    </div>
+    ${msgHTML()}${h.list}
+  </div>`;
+}
+function stageL2(){
+  const h = hintsHTML('l2');
+  const all = SET.main.words.every((_,i) => state.form2[i]);
+  return `<div class="card">
+    ${lockHead(2,'형태 자물쇠')}
+    <div class="story">서랍이 둘로 나뉜 금고예요. 단어를 <b>불변어</b>(형태가 변하지 않음)와 <b>가변어</b>(형태가 변함) 서랍에 나눠 넣어요.</div>
+    <div class="split-line">${splitLine(SET.main.words)}</div>
+    <div class="wgrid">${SET.main.words.map((x,i) => `
+      <div class="wcard"><div class="w">${esc(x.w)}</div>
+        <div class="seg">${FORMS.map(f => `<button class="${state.form2[i]===f?'on':''}" data-act="form" data-i="${i}" data-v="${f}">${f}</button>`).join('')}</div>
+      </div>`).join('')}</div>
+    <div class="actions">${h.btn}<span class="spacer"></span>
+      <button class="btn primary" data-act="check-l2" ${all?'':'disabled'}>자물쇠 열기 🔓</button></div>
+    ${msgHTML()}${h.list}
+  </div>`;
+}
+function sorterHTML(key, bins, st){
+  const pool = SET.main.words.map((_,i)=>i).filter(i => !(i in st.place));
+  const armed = st.sel !== null;
+  return `<div class="pool">${pool.length
+      ? pool.map(i => `<button class="chip ${st.sel===i?'sel':''}" data-act="pick" data-k="${key}" data-i="${i}">${esc(SET.main.words[i].w)}</button>`).join('')
+      : '<span class="muted">모든 단어를 놓았어요! 아래에서 확인해 보세요.</span>'}</div>
+    <div class="bins ${bins.length>5?'bins9':''} ${armed?'armed':''}">
+      ${bins.map(b => `<div class="bin" data-act="place" data-k="${key}" data-bin="${b.name}">
+        <div class="bn">${b.name}</div><div class="bd">${esc(b.def)}</div>
+        <div class="bchips">${SET.main.words.map((x,i) => st.place[i]===b.name
+          ? `<button class="chip placed" data-act="unplace" data-k="${key}" data-i="${i}">${esc(x.w)}</button>` : '').join('')}</div>
+      </div>`).join('')}
+    </div>`;
+}
+function stageL3(){
+  const h = hintsHTML('l3');
+  const done = Object.keys(state.s3.place).length === SET.main.words.length;
+  return `<div class="card">
+    ${lockHead(3,'기능 자물쇠')}
+    <div class="story">열쇠 구멍 5개가 각자 다른 역할을 기다리고 있어요. 단어를 탭한 뒤, 알맞은 구멍을 탭해서 넣어요.</div>
+    <div class="split-line">${splitLine(SET.main.words)}</div>
+    ${sorterHTML('l3', FUNC_BINS, state.s3)}
+    <div class="actions">${h.btn}<span class="spacer"></span>
+      <button class="btn primary" data-act="check-sorter" data-k="l3" ${done?'':'disabled'}>자물쇠 열기 🔓</button></div>
+    ${msgHTML()}${h.list}
+  </div>`;
+}
+function stageL4(){
+  const h = hintsHTML('l4');
+  const done = Object.keys(state.s4.place).length === SET.main.words.length;
+  return `<div class="card">
+    ${lockHead(4,'의미 자물쇠')}
+    <div class="story">마지막 자물쇠에는 뜻풀이가 적힌 구멍 9개가 있어요. 각 단어를 알맞은 뜻풀이(품사)에 넣어요.</div>
+    <div class="split-line">${splitLine(SET.main.words)}</div>
+    ${sorterHTML('l4', MEAN_BINS, state.s4)}
+    <div class="actions">${h.btn}<span class="spacer"></span>
+      <button class="btn primary" data-act="check-sorter" data-k="l4" ${done?'':'disabled'}>자물쇠 열기 🔓</button></div>
+    ${msgHTML()}${h.list}
+  </div>`;
+}
+function stageCode(){
+  const h = hintsHTML('code');
+  const used = state.code.slots.filter(v => v !== null);
+  const filled = used.length === 4;
+  return `<div class="card">
+    <div class="lock-head"><span class="lockno">🔑</span><div><h2>금고 이름표 암호</h2><p class="sub">모은 글자를 알맞은 순서로 놓으세요</p></div></div>
+    <div class="clue">‘단어의 갈래 이름(두 글자)’ + ‘잠금을 여는 도구(두 글자)’</div>
+    <div class="slots">${state.code.slots.map((v,s) => `<div class="slot ${v!==null?'filled':''}" data-act="slot" data-s="${s}">${v!==null?esc(state.letters[v]):''}</div>`).join('')}</div>
+    <div class="tiles">${state.letters.map((L,i) => `<button class="tile ${used.includes(i)?'used':''}" data-act="tile" data-i="${i}">${esc(L)}</button>`).join('')}</div>
+    <p class="muted" style="text-align:center">글자를 탭하면 빈칸에 들어가고, 칸을 탭하면 글자가 되돌아가요.</p>
+    <div class="actions">${h.btn}<span class="spacer"></span>
+      <button class="btn primary" data-act="check-code" ${filled?'':'disabled'}>암호 입력 🔓</button></div>
+    ${msgHTML()}${h.list}
+  </div>`;
+}
+function stageScan(){
+  if (state.scan.step === 'cut'){
+    const h = hintsHTML('scanCut');
+    return `<div class="card">
+      <div class="lock-head"><span class="lockno">🛡️</span><div><h2>마지막 보안 장치 · 1단계</h2><p class="sub">새 문장을 단어로 나누세요</p></div></div>
+      <div class="story">금고 안쪽에 보안 스캐너가 있어요. 새 문장을 완벽하게 분석해야 통과할 수 있어요!</div>
+      ${cutHTML(SET.scan, state.scan.cut, state.scan.badCut)}
+      <div class="counter">지금 나눈 단어 <b>${state.scan.cut.size + 1}</b>개</div>
+      <div class="actions"><button class="btn" data-act="clear-cut" data-scope="scan">가위선 모두 지우기</button>
+        ${h.btn}<span class="spacer"></span>
+        <button class="btn primary" data-act="check-scan-cut">다음 단계 ▶</button></div>
+      ${msgHTML()}${h.list}
+    </div>`;
+  }
+  const h = hintsHTML('scanTable');
+  const opt = (arr, cur) => `<option value="">선택</option>` + arr.map(v => `<option value="${v}" ${cur===v?'selected':''}>${v}</option>`).join('');
+  const bad = state.scan.bad || new Set();
+  return `<div class="card">
+    <div class="lock-head"><span class="lockno">🛡️</span><div><h2>마지막 보안 장치 · 2단계</h2><p class="sub">단어마다 형태·기능·의미를 고르세요</p></div></div>
+    <div class="split-line">${splitLine(SET.scan.words)}</div>
+    <div class="tbl">
+      <div class="trow head"><span>단어</span><span>형태</span><span>기능</span><span>의미</span></div>
+      ${SET.scan.words.map((x,i) => { const r = state.scan.table[i] || {}; return `
+      <div class="trow"><span class="tw">${esc(x.w)}</span>
+        <select data-tbl="${i}" data-f="form" class="${bad.has(i+'-form')?'bad':''}" aria-label="${esc(x.w)} 형태">${opt(FORMS, r.form)}</select>
+        <select data-tbl="${i}" data-f="func" class="${bad.has(i+'-func')?'bad':''}" aria-label="${esc(x.w)} 기능">${opt(FUNC_BINS.map(b=>b.name), r.func)}</select>
+        <select data-tbl="${i}" data-f="mean" class="${bad.has(i+'-mean')?'bad':''}" aria-label="${esc(x.w)} 의미">${opt(MEAN_BINS.map(b=>b.name), r.mean)}</select>
+      </div>`; }).join('')}
+    </div>
+    <div class="actions">${h.btn}<span class="spacer"></span>
+      <button class="btn primary" data-act="check-table">금고 열기 🔓</button></div>
+    ${msgHTML()}${h.list}
+  </div>`;
+}
+function stageHTML(){
+  switch(state.stage){
+    case 'l1': return stageL1();
+    case 'l2': return stageL2();
+    case 'l3': return stageL3();
+    case 'l4': return stageL4();
+    case 'code': return stageCode();
+    default: return stageScan();
+  }
+}
+
+function groupRecap(field, order){
+  return order.map(name => {
+    const ws = SET.main.words.filter(x => x[field] === name).map(x => x.w);
+    return ws.length ? `<div class="rline"><b>${name}</b> : ${ws.map(esc).join(', ')}</div>` : '';
+  }).join('');
+}
+function revealHTML(){
+  const r = state.reveal;
+  const boxes = ['l1','l2','l3','l4'].map(k => `<div class="lb ${state.done[k]?'on':''}">${state.done[k]?LETTERS[k]:'?'}</div>`).join('');
+  const visual = r.kind === 'vault'
+    ? `<div class="vaultscene"><div class="vaultglow"></div><div class="vaultdoor">${vaultSVG()}</div></div>`
+    : `<div class="padwrap">${padlockSVG()}</div><div class="bigletter" aria-hidden="true">${esc(r.big)}</div>`;
+  return `<div class="card reveal">
+    ${visual}
+    <div class="fadein">
+      <h2>${esc(r.title)}</h2>
+      <p>${esc(r.text)}</p>
+      ${r.showLetters ? `<div class="letterbox" style="justify-content:center" aria-label="모은 글자">${boxes}</div>` : ''}
+      ${r.recap ? `<div class="recap">${r.recap}</div>` : ''}
+      <div class="actions" style="justify-content:center"><button class="btn primary" data-act="next">${esc(r.nextLabel)}</button></div>
+    </div>
+  </div>`;
+}
+
+function resultHTML(){
+  const sec = Math.floor((state.end - state.start)/1000);
+  const score = Math.max(0, 100 - state.wrong*4 - state.hints*3);
+  const stars = state.timedOut ? 1 : (score >= 85 ? 3 : score >= 65 ? 2 : 1);
+  const left = Math.max(0, LIMIT - sec);
+  return `<div class="card hero">
+    <div class="vaultscene"><div class="vaultglow"></div><div class="vaultdoor">${vaultSVG()}</div></div>
+    <h1>${state.timedOut ? '시간 초과… 그래도 열었다!' : '탈출 성공!'}</h1>
+    <p><b>${esc(state.team || '우리 탐정단')}</b>이(가) 품사 금고를 열고 <b style="color:var(--gold)">품사 박사의 연구 노트</b>를 찾았어요!</p>
+    ${state.timedOut ? '<p class="muted">제한 시간 안에 탈출하지 못해 별은 1개예요.</p>' : ''}
+    <div class="stars" aria-label="별 ${stars}개">${'⭐'.repeat(stars)}${'☆'.repeat(3-stars)}</div>
+    <div class="rstats">
+      <div class="rs"><div class="n">${fmt(sec)}</div><div class="l">걸린 시간</div></div>
+      ${state.timedOut ? '' : `<div class="rs"><div class="n">${fmt(left)}</div><div class="l">남은 시간</div></div>`}
+      <div class="rs"><div class="n">${state.hints}</div><div class="l">사용한 힌트</div></div>
+      <div class="rs"><div class="n">${state.wrong}</div><div class="l">오답 횟수</div></div>
+      <div class="rs"><div class="n">${score}</div><div class="l">점수</div></div>
+    </div>
+    <p class="muted">점수 = 100점 − 오답 4점씩 − 힌트 3점씩</p>
+    <details><summary>오늘의 품사 정리표 보기</summary>
+      ${[SET.main, SET.scan].map(sn => `<p class="muted" style="margin:10px 0 0">${esc(sn.text)}</p>
+      <table class="sum"><tr><th>단어</th><th>형태</th><th>기능</th><th>의미</th></tr>
+      ${sn.words.map(x => `<tr><td>${esc(x.w)}</td><td>${x.form}</td><td>${x.func}</td><td>${x.mean}</td></tr>`).join('')}</table>`).join('')}
+    </details>
+    <p style="margin-top:18px"><button class="btn primary" data-act="restart">다시 도전하기</button></p>
+  </div>`;
+}
+
+function notebookHTML(){
+  const boxes = ['l1','l2','l3','l4'].map(k => `<div class="lb ${state.done[k]?'on':''}">${state.done[k]?LETTERS[k]:'?'}</div>`).join('');
+  const memos = state.memosSeen.length
+    ? state.memosSeen.map(k => `<div class="nm"><b>${esc(MEMOS[k].title)}</b><br>${MEMOS[k].text.map(esc).join(' ')}</div>`).join('')
+    : '<div class="empty">아직 읽은 쪽지가 없어요.</div>';
+  const hints = state.hintLog.length
+    ? state.hintLog.map(h => `<div class="nm">💡 <b>${esc(h.label)}</b> — ${esc(h.text)}</div>`).join('')
+    : '<div class="empty">사용한 힌트가 없어요. 대단해요!</div>';
+  const keys = Object.keys(state.recaps);
+  const recaps = keys.length
+    ? keys.map(k => `<div class="nm">${state.recaps[k]}</div>`).join('')
+    : '<div class="empty">자물쇠를 열면 정리 메모가 여기에 쌓여요.</div>';
+  return `<div class="sheet" data-act="close-notebook-bg">
+    <div class="notebook" role="dialog" aria-label="단서 노트">
+      <h2>📓 단서 노트</h2>
+      <h3>모은 글자 <span style="font-size:15px">(자물쇠 번호 순서)</span></h3>
+      <div class="letterbox">${boxes}</div>
+      <h3>품사 박사의 쪽지</h3>${memos}
+      <h3>힌트 기록</h3>${hints}
+      <h3>정리 메모</h3>${recaps}
+      <h3>우리 탐정단 메모</h3>
+      <textarea id="notes" placeholder="단서, 추리, 의견을 적어 두세요">${esc(state.notes)}</textarea>
+      <div class="actions"><span class="spacer"></span><button class="btn" data-act="close-notebook">닫기 ✕</button></div>
+    </div></div>`;
+}
+function alarmHTML(){
+  return `<div class="alarm" role="alertdialog" aria-label="시간 초과">
+    <div class="box"><div style="font-size:64px">🚨</div>
+      <h1>시간 초과!</h1>
+      <p>금고 보안 시스템이 작동했어요.<br>품사 박사의 연구 노트는 아직 금고 안에 있어요…</p>
+      <div class="actions">
+        <button class="btn primary" data-act="practice">연습 모드로 계속하기</button>
+        <button class="btn" data-act="restart">처음부터 다시 도전</button>
+      </div>
+      <p class="muted">연습 모드로 끝내면 별은 1개로 기록돼요.</p>
+    </div></div>`;
+}
+
+
+/* ================= 문장 편집기 (교사용) ================= */
+const MEAN_LIST = Object.keys(MEAN_MAP);
+const FUNC_LIST = ['체언','용언','수식언','관계언','독립언'];
+const b64enc = str => btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+const b64dec = code => new TextDecoder().decode(Uint8Array.from(atob(code.replace(/\s+/g,'')), ch => ch.charCodeAt(0)));
+const sanitize = t => t.replace(/[^\uAC00-\uD7A3ㄱ-ㅎㅏ-ㅣA-Za-z0-9\s,.!?~…]/g,'').replace(/\s+/g,' ').trim();
+
+function edCells(text){ return flatCells({ eojeol: text.trim().split(/\s+/).filter(Boolean).map(t => ({t})) }); }
+function edForced(text){
+  const set = new Set(); let acc = 0;
+  const eoj = text.trim().split(/\s+/).filter(Boolean);
+  eoj.forEach((e,i) => { acc += [...e.replace(PUNCT,'')].length; if (i < eoj.length-1) set.add(String(acc-1)); });
+  return set;
+}
+function edWords(text, cut){
+  const cells = edCells(text), out = []; let cur = '';
+  cells.forEach((c,i) => { cur += c.replace(PUNCT,''); if (i === cells.length-1 || cut.has(String(i))){ out.push(cur); cur = ''; } });
+  return out;
+}
+function edSync(ed){
+  const words = edWords(ed.text, ed.cut), old = ed.rows;
+  ed.rows = words.map((w,i) => (old[i] && old[i].w === w) ? old[i] : { w, mean:'', func:'', form:'' });
+}
+function edFromSentence(sn){
+  const ed = { draft:sn.text, text:sn.text, cut:reqCuts(sn), rows:sn.words.map(x => ({ w:x.w, mean:x.mean, func:x.func, form:x.form })), msg:null };
+  return ed;
+}
+function edEmpty(){ return { draft:'', text:'', cut:new Set(), rows:[], msg:null }; }
+function edCommit(ed){
+  if (!ed.text.trim()) throw new Error('문장을 입력하고 [문장 적용]을 눌러 주세요.');
+  if (ed.rows.length < 3) throw new Error('단어가 3개 이상이 되도록 나눠 주세요.');
+  const bad = ed.rows.find(r => !r.mean || !r.func || !r.form);
+  if (bad) throw new Error(`‘${bad.w}’의 의미·기능·형태를 모두 골라 주세요.`);
+  const inc = checkConsistency(ed.rows);
+  if (inc) throw new Error(inc);
+  return buildSentence(ed.text, ed.rows.map(r => [r.w, r.mean, r.func, r.form]));
+}
+function edStatus(ed){ try { edCommit(ed); return { ok:true }; } catch(e){ return { ok:false, msg:e.message }; } }
+
+let ED = { tab:'main', main:edFromSentence(SET.main), scan:edFromSentence(SET.scan), codeOut:'', codeIn:'', importMsg:null, saveName:'', note:null };
+
+function encodeSet(main, scan){
+  const pack = sn => ({ t:sn.text, w:sn.words.map(x => [x.w, x.mean, x.func, x.form]) });
+  return b64enc(JSON.stringify({ v:1, m:pack(main), s:pack(scan) }));
+}
+function decodeSet(code){
+  let o; try { o = JSON.parse(b64dec(code)); } catch(e){ throw new Error('세트 코드를 읽을 수 없어요. 코드를 통째로 붙여 넣었는지 확인해 주세요.'); }
+  if (!o || o.v !== 1 || !o.m || !o.s) throw new Error('지원하지 않는 세트 코드예요.');
+  const mk = p => { const sn = buildSentence(p.t, p.w); const inc = checkConsistency(sn.words); if (inc) throw new Error(inc); return sn; };
+  return { main:mk(o.m), scan:mk(o.s) };
+}
+function loadSaved(){ try { return JSON.parse(localStorage.getItem('chae_pos_sets') || '[]'); } catch(e){ return []; } }
+function storeSaved(list){ try { localStorage.setItem('chae_pos_sets', JSON.stringify(list)); return true; } catch(e){ return false; } }
+
+function edHTML(){
+  const tab = ED.tab, ed = ED[tab];
+  const st = { main:edStatus(ED.main), scan:edStatus(ED.scan) };
+  const tabBtn = (k,label) => `<button class="tab ${tab===k?'on':''}" data-act="ed-tab" data-k="${k}">${label} ${st[k].ok?'✅':'⚠️'}</button>`;
+  const cells = edCells(ed.text), forced = edForced(ed.text);
+  const cutbox = cells.length
+    ? `<div class="cutbox">` + cells.map((c,i) => {
+        const k = String(i); let gap = '';
+        if (i < cells.length-1){
+          gap = forced.has(k) ? `<span class="gap cut forced" aria-hidden="true"></span>`
+            : `<button class="gap ${ed.cut.has(k)?'cut':''}" data-act="ed-gap" data-k="${k}" aria-label="${esc(c)} 뒤에서 나누기"></button>`;
+        }
+        return `<span class="unit"><span class="cell">${esc(c)}</span>${gap}</span>`;
+      }).join('') + `</div><p class="muted">금색 선은 띄어쓰기라서 자동으로 나뉘어요. 조사처럼 더 나눌 곳만 탭해 주세요.</p>`
+    : `<div class="muted">문장을 입력하고 [문장 적용]을 눌러 주세요.</div>`;
+  const opt = (arr, cur) => `<option value="">선택</option>` + arr.map(v => `<option value="${v}" ${cur===v?'selected':''}>${v}</option>`).join('');
+  const rows = ed.rows.length ? `<div class="tbl">
+      <div class="trow head"><span>단어</span><span>의미(품사)</span><span>기능</span><span>형태</span></div>
+      ${ed.rows.map((r,i) => `<div class="trow"><span class="tw">${esc(r.w)}</span>
+        <select data-ed="${i}" data-f="mean" aria-label="${esc(r.w)} 의미">${opt(MEAN_LIST, r.mean)}</select>
+        <select data-ed="${i}" data-f="func" aria-label="${esc(r.w)} 기능">${opt(FUNC_LIST, r.func)}</select>
+        <select data-ed="${i}" data-f="form" aria-label="${esc(r.w)} 형태">${opt(FORMS, r.form)}</select></div>`).join('')}
+    </div>` : '';
+  const saved = loadSaved();
+  return `<div class="card">
+    <div class="lock-head"><span class="lockno">📝</span><div><h2>문장 바꾸기 (교사용)</h2><p class="sub">자물쇠 1~4번 문장과 마지막 보안 장치 문장을 정해요</p></div></div>
+    <div class="tabs">${tabBtn('main','🔒 자물쇠 1~4번 문장')}${tabBtn('scan','🛡️ 보안 장치 문장')}</div>
+
+    <h3 class="h3s">① 문장 넣기</h3>
+    <div class="row2"><button class="btn" data-act="ed-load-default">기본 문장 불러오기</button>
+      <span class="muted">이 탭의 기본 문장으로 되돌려요.</span></div>
+    <input type="text" class="txt" id="ed-text" maxlength="70" placeholder="직접 문장을 입력하세요 (예: 와, 우리 모둠이 정말 멋지다.)" value="${esc(ed.draft)}" aria-label="문장 입력">
+    <div class="actions"><button class="btn" data-act="ed-apply-text">문장 적용</button></div>
+
+    <h3 class="h3s">② 단어 나누기</h3>
+    ${cutbox}
+    <h3 class="h3s">③ 단어별 의미·기능·형태 (의미를 고르면 기능·형태가 자동으로 채워져요)</h3>
+    ${rows || '<div class="muted">문장을 적용하면 표가 나타나요.</div>'}
+    ${ed.msg ? `<div class="msg ${ed.msg.kind}" role="status">${esc(ed.msg.text)}</div>` : ''}
+    ${st[tab].ok ? '<div class="msg ok">이 문장은 준비됐어요 ✔</div>' : `<div class="msg warn">${esc(st[tab].msg)}</div>`}
+  </div>
+
+  <div class="card">
+    <h3 class="h3s" style="margin-top:0">④ 적용 · 공유</h3>
+    <div class="actions" style="margin-top:0">
+      <button class="btn primary" data-act="ed-apply">적용하고 시작 화면으로 ✔</button>
+      <button class="btn" data-act="ed-code">세트 코드 만들기</button>
+      <button class="btn" data-act="ed-reset">기본 문장으로 되돌리기</button>
+      <button class="btn" data-act="ed-back">← 돌아가기</button>
+    </div>
+    ${ED.note ? `<div class="msg ${ED.note.kind}" role="status">${esc(ED.note.text)}</div>` : ''}
+    ${ED.codeOut ? `<p class="muted" style="margin-top:14px">학생들에게 이 코드를 전달하면, 시작 화면의 “세트 코드” 칸에 붙여 넣어 같은 문장으로 할 수 있어요.</p>
+      <textarea class="code" id="codeout" readonly>${esc(ED.codeOut)}</textarea>
+      <div class="actions"><button class="btn" data-act="ed-copy">📋 코드 복사</button></div>` : ''}
+    <h3 class="h3s">이 기기에 저장 / 불러오기</h3>
+    <div class="row2"><input type="text" class="txt" id="savename" maxlength="20" placeholder="세트 이름 (예: 3학년 2반 복습)" value="${esc(ED.saveName)}" aria-label="세트 이름">
+      <button class="btn" data-act="ed-save">이 기기에 저장</button></div>
+    ${saved.length ? saved.map((x,i) => `<div class="saved"><span>${esc(x.name)}</span><span><button class="btn" data-act="ed-load-saved" data-i="${i}">불러오기</button> <button class="btn" data-act="ed-del-saved" data-i="${i}">삭제</button></span></div>`).join('') : '<p class="muted">저장한 세트가 없어요.</p>'}
+    <h3 class="h3s">세트 코드 불러오기</h3>
+    <textarea class="code" id="codein-ed" placeholder="세트 코드를 붙여 넣으세요">${esc(ED.codeIn)}</textarea>
+    <div class="actions"><button class="btn" data-act="ed-import">코드 불러오기</button></div>
+  </div>`;
+}
+
+function render(){
+  let html = headerHTML();
+  if (state.screen === 'intro') html += introHTML();
+  else if (state.screen === 'result') html += resultHTML();
+  else if (state.screen === 'editor') html += edHTML();
+  else html += trackHTML() + (state.reveal ? revealHTML() : (state.memo ? memoHTML(state.memo) : stageHTML()));
+  if (state.notebook && state.screen === 'play') html += notebookHTML();
+  if (state.timeout && state.screen === 'play') html += alarmHTML();
+  app.innerHTML = html;
+}
+
+/* ================= 동작 ================= */
+function setMsg(text, kind){ state.msg = {text, kind}; }
+function toTop(){ window.scrollTo({top:0, behavior:'auto'}); }
+function fail(){ state.wrong++; SFX.wrong(); }
+
+function unlock(key){
+  state.done[key] = true;
+  state.letters.push(LETTERS[key]);
+  const nextMap = { l1:'l2', l2:'l3', l3:'l4', l4:'code' };
+  let recap = '', title = '';
+  if (key === 'l1'){ title = '1번 · 단어 나누기'; recap = `<div class="rline"><b>단어</b> : ${splitLine(SET.main.words)}</div>`; }
+  if (key === 'l2'){ title = '2번 · 형태'; recap = `<div class="rline"><b>가변어</b> : ${SET.main.words.filter(x=>x.form==='가변어').map(x=>esc(x.w)).join(', ')}</div><div class="rline"><b>불변어</b> : ${SET.main.words.filter(x=>x.form==='불변어').map(x=>esc(x.w)).join(', ')}</div>`; }
+  if (key === 'l3'){ title = '3번 · 기능'; recap = groupRecap('func', FUNC_BINS.map(b=>b.name)); }
+  if (key === 'l4'){ title = '4번 · 의미'; recap = groupRecap('mean', MEAN_BINS.map(b=>b.name)); }
+  state.recaps[key] = `<div><b>${title}</b></div>${recap}`;
+  const no = {l1:1,l2:2,l3:3,l4:4}[key];
+  state.reveal = { kind:'lock', big:LETTERS[key], title:`${no}번 자물쇠 열림!`, text:`비밀 글자 ‘${LETTERS[key]}’를 얻었어요. 단서 노트에도 기록했어요.`,
+    showLetters:true, recap, goto:nextMap[key], nextLabel: key==='l4' ? '금고 문 앞으로 ▶' : '다음 쪽지 읽기 ▶' };
+  state.msg = null;
+  SFX.clank(); setTimeout(SFX.chime, 520);
+  render(); toTop();
+}
+
+const actions = {
+  start(){
+    const t = document.getElementById('team');
+    state.team = t ? t.value.trim() : '';
+    state.screen = 'play'; goMemo('l1');
+    lastTick = -1; startTimer(false); SFX.rumble(); render(); toTop();
+  },
+  mute(){ muted = !muted; if (!muted) SFX.tap(); render(); },
+  notebook(){ state.notebook = true; SFX.page(); render(); },
+  'close-notebook'(){ state.notebook = false; SFX.page(); render(); },
+  'close-notebook-bg'(el, ev){ if (ev.target === el){ state.notebook = false; render(); } },
+  'read-memo'(){ state.memo = null; SFX.page(); render(); toTop(); },
+  gap(el){
+    const isScan = state.stage === 'scan';
+    const set = isScan ? state.scan.cut : state.cut1, k = el.dataset.k;
+    if (set.has(k)){ set.delete(k); SFX.tap(); } else { set.add(k); SFX.snip(); }
+    if (isScan) state.scan.badCut = null; else state.badCut = null;
+    render();
+  },
+  'clear-cut'(el){
+    if (el.dataset.scope === 'scan'){ state.scan.cut.clear(); state.scan.badCut = null; }
+    else { state.cut1.clear(); state.badCut = null; }
+    SFX.tap(); render();
+  },
+  'check-l1'(){
+    const r = checkCut(SET.main, state.cut1);
+    if (r.ok) return unlock('l1');
+    fail(); state.badCut = r.extra;
+    const parts = [];
+    if (r.extra.size) parts.push(`잘못 나눈 곳이 ${r.extra.size}군데 있어요(빨간 선).`);
+    if (r.missing.length) parts.push('아직 더 나눠야 할 곳이 있어요.');
+    setMsg(parts.join(' '), 'bad'); render();
+  },
+  hint(){
+    const k = hintKey();
+    const used = state.hintIdx[k] || 0;
+    if (used < getHints(k).length){
+      state.hintIdx[k] = used+1; state.hints++;
+      state.hintLog.push({ label:HINT_LABEL[k], text:getHints(k)[used] });
+      SFX.chime();
+    }
+    render();
+  },
+  form(el){ state.form2[el.dataset.i] = el.dataset.v; SFX.tap(); render(); },
+  'check-l2'(){
+    const wrong = SET.main.words.filter((x,i) => state.form2[i] !== x.form).length;
+    if (!wrong) return unlock('l2');
+    fail(); setMsg(`${wrong}개의 단어가 알맞은 서랍에 있지 않아요. 다시 살펴봐요!`, 'bad'); render();
+  },
+  pick(el){
+    const st = el.dataset.k === 'l3' ? state.s3 : state.s4;
+    const i = Number(el.dataset.i);
+    st.sel = st.sel === i ? null : i; SFX.tap(); render();
+  },
+  place(el){
+    const st = el.dataset.k === 'l3' ? state.s3 : state.s4;
+    if (st.sel === null){ setMsg('먼저 위에서 단어를 하나 탭해 주세요.', 'warn'); render(); return; }
+    st.place[st.sel] = el.dataset.bin; st.sel = null; SFX.tap(); render();
+  },
+  unplace(el){
+    const st = el.dataset.k === 'l3' ? state.s3 : state.s4;
+    delete st.place[Number(el.dataset.i)]; st.sel = null; SFX.tap(); render();
+  },
+  'check-sorter'(el){
+    const key = el.dataset.k, st = key === 'l3' ? state.s3 : state.s4, field = key === 'l3' ? 'func' : 'mean';
+    const wrong = SET.main.words.map((_,i)=>i).filter(i => st.place[i] !== SET.main.words[i][field]);
+    if (!wrong.length) return unlock(key);
+    fail(); wrong.forEach(i => delete st.place[i]); st.sel = null;
+    setMsg(`${wrong.length}개의 단어가 제자리가 아니라서 되돌아왔어요. 다시 생각해 봐요!`, 'bad'); render();
+  },
+  tile(el){
+    const i = Number(el.dataset.i), slots = state.code.slots;
+    if (slots.includes(i)) return;
+    const s = slots.indexOf(null); if (s === -1) return;
+    slots[s] = i; SFX.tap(); render();
+  },
+  slot(el){ state.code.slots[Number(el.dataset.s)] = null; SFX.tap(); render(); },
+  'check-code'(){
+    const word = state.code.slots.map(i => state.letters[i]).join('');
+    if (word !== CODE){ fail(); setMsg('암호가 맞지 않아요. 글자의 순서를 바꿔 보세요!', 'bad'); render(); return; }
+    state.done.code = true;
+    state.recaps.code = `<div><b>암호</b> : ${esc(CODE)}</div>`;
+    state.reveal = { kind:'vault', big:'🚪', title:'암호 일치!', text:'바퀴가 돌아가며 금고 문이 열려요. 그런데 안쪽에 마지막 보안 장치가 있어요. 새 문장을 정확히 분석해야 통과할 수 있어요.',
+      showLetters:false, recap:`<div class="rline"><b>암호</b> : ${esc(CODE)}</div>`, goto:'scan', nextLabel:'보안 장치로 ▶' };
+    state.msg = null; SFX.rumble(); setTimeout(SFX.clank, 1300); setTimeout(SFX.chime, 1500); render(); toTop();
+  },
+  'check-scan-cut'(){
+    const r = checkCut(SET.scan, state.scan.cut);
+    if (r.ok){ state.scan.step = 'table'; state.scan.badCut = null; state.msg = null; SFX.clank(); render(); toTop(); return; }
+    fail(); state.scan.badCut = r.extra;
+    const parts = [];
+    if (r.extra.size) parts.push(`잘못 나눈 곳이 ${r.extra.size}군데 있어요(빨간 선).`);
+    if (r.missing.length) parts.push('아직 더 나눠야 할 곳이 있어요.');
+    setMsg(parts.join(' '), 'bad'); render();
+  },
+  'check-table'(){
+    const t = state.scan.table, bad = new Set();
+    let missing = false;
+    SET.scan.words.forEach((w,i) => { const r = t[i] || {};
+      ['form','func','mean'].forEach(f => { if (!r[f]) missing = true; else if (r[f] !== w[f]) bad.add(i+'-'+f); });
+    });
+    if (missing){ setMsg('아직 고르지 않은 칸이 있어요.', 'warn'); state.scan.bad = null; render(); return; }
+    if (bad.size){
+      fail(); state.scan.bad = bad;
+      setMsg(`${bad.size}칸이 맞지 않아요. 빨간 칸을 다시 살펴봐요!`, 'bad'); render(); return;
+    }
+    state.done.scan = true; state.end = Date.now(); stopTimer();
+    state.screen = 'result'; state.msg = null; SFX.clank(); setTimeout(SFX.win, 400); render(); toTop();
+  },
+  next(){
+    const r = state.reveal; state.reveal = null; state.msg = null; goMemo(r.goto); SFX.page(); render(); toTop();
+  },
+  practice(){
+    state.timeout = false; state.practice = true; startTimer(true); SFX.tap(); render();
+  },
+  restart(){
+    const team = state.team; stopTimer(); state = fresh(team); lastTick = -1; render(); toTop();
+  },
+};
+
+
+Object.assign(actions, {
+  'teacher-toggle'(){ state.teacher = !state.teacher; render(); },
+  editor(){
+    const t = document.getElementById('team'); if (t) state.team = t.value.trim();
+    ED.main = edFromSentence(SET.main); ED.scan = edFromSentence(SET.scan); ED.tab = 'main'; ED.note = null;
+    state.screen = 'editor'; SFX.page(); render(); toTop();
+  },
+  'ed-tab'(el){ ED.tab = el.dataset.k; render(); },
+  'ed-gap'(el){
+    const ed = ED[ED.tab], k = el.dataset.k;
+    ed.cut.has(k) ? ed.cut.delete(k) : ed.cut.add(k);
+    edSync(ed); SFX.snip(); render();
+  },
+  'ed-load-default'(){
+    const sn = defaultSet()[ED.tab];
+    ED[ED.tab] = edFromSentence(sn); SFX.tap(); render();
+  },
+  'ed-apply-text'(){
+    const ed = ED[ED.tab], t = sanitize(ed.draft || '');
+    if (!t){ ed.msg = { kind:'warn', text:'문장을 입력해 주세요.' }; render(); return; }
+    if ([...t.replace(/\s/g,'')].length > 60){ ed.msg = { kind:'warn', text:'문장이 너무 길어요. 60글자 이하로 줄여 주세요.' }; render(); return; }
+    ed.text = t; ed.draft = t; ed.cut = edForced(t); ed.rows = []; edSync(ed);
+    ed.msg = null; SFX.tap(); render();
+  },
+  'ed-apply'(){
+    let main, scan;
+    try { main = edCommit(ED.main); }
+    catch(e){ ED.tab = 'main'; ED.note = { kind:'bad', text:`적용할 수 없어요 (자물쇠 1~4번 문장): ${e.message}` }; render(); return; }
+    try { scan = edCommit(ED.scan); }
+    catch(e){ ED.tab = 'scan'; ED.note = { kind:'bad', text:`적용할 수 없어요 (보안 장치 문장): ${e.message}` }; render(); return; }
+    SET = { main, scan };
+    state = fresh(state.team); ED.note = null; SFX.chime(); render(); toTop();
+  },
+  'ed-back'(){ state.screen = 'intro'; render(); toTop(); },
+  'ed-reset'(){
+    SET = defaultSet(); ED.main = edFromSentence(SET.main); ED.scan = edFromSentence(SET.scan);
+    ED.note = { kind:'ok', text:'기본 문장으로 되돌렸어요.' }; ED.codeOut = ''; render();
+  },
+  'ed-code'(){
+    try { ED.codeOut = encodeSet(edCommit(ED.main), edCommit(ED.scan)); ED.note = { kind:'ok', text:'세트 코드를 만들었어요. 아래 코드를 복사해서 전달하세요.' }; }
+    catch(e){ ED.codeOut = ''; ED.note = { kind:'bad', text:`코드를 만들 수 없어요: ${e.message}` }; }
+    render();
+  },
+  async 'ed-copy'(){
+    const ta = document.getElementById('codeout'); if (!ta) return;
+    let ok = false;
+    try { await navigator.clipboard.writeText(ED.codeOut); ok = true; } catch(e){ try { ta.select(); ok = document.execCommand('copy'); } catch(e2){} }
+    ED.note = ok ? { kind:'ok', text:'코드를 복사했어요!' } : { kind:'warn', text:'복사가 막혀 있어요. 코드 칸을 길게 눌러 직접 복사해 주세요.' };
+    render();
+  },
+  'ed-save'(){
+    const name = (ED.saveName || '').trim() || '이름 없는 세트';
+    try {
+      const code = encodeSet(edCommit(ED.main), edCommit(ED.scan));
+      const list = loadSaved().filter(x => x.name !== name); list.push({ name, code });
+      ED.note = storeSaved(list) ? { kind:'ok', text:`‘${name}’ 세트를 이 기기에 저장했어요.` } : { kind:'warn', text:'이 기기에는 저장할 수 없어요. 세트 코드로 보관해 주세요.' };
+    } catch(e){ ED.note = { kind:'bad', text:`저장할 수 없어요: ${e.message}` }; }
+    render();
+  },
+  'ed-load-saved'(el){
+    const item = loadSaved()[Number(el.dataset.i)]; if (!item) return;
+    try { const set = decodeSet(item.code); ED.main = edFromSentence(set.main); ED.scan = edFromSentence(set.scan); ED.note = { kind:'ok', text:`‘${item.name}’ 세트를 불러왔어요. [적용하고 시작 화면으로]를 눌러 주세요.` }; }
+    catch(e){ ED.note = { kind:'bad', text:e.message }; }
+    render();
+  },
+  'ed-del-saved'(el){ const list = loadSaved(); list.splice(Number(el.dataset.i), 1); storeSaved(list); render(); },
+  'ed-import'(){
+    try { const set = decodeSet(ED.codeIn || ''); ED.main = edFromSentence(set.main); ED.scan = edFromSentence(set.scan); ED.note = { kind:'ok', text:'세트를 불러왔어요. [적용하고 시작 화면으로]를 눌러 주세요.' }; }
+    catch(e){ ED.note = { kind:'bad', text:e.message }; }
+    render();
+  },
+  'import-code'(){
+    try { const set = decodeSet(ED.codeIn || ''); SET = set; state = fresh(state.team); ED.main = edFromSentence(SET.main); ED.scan = edFromSentence(SET.scan); ED.importMsg = { kind:'ok', text:'선생님이 만든 문장으로 바뀌었어요!' }; SFX.chime(); }
+    catch(e){ ED.importMsg = { kind:'bad', text:e.message }; }
+    render();
+  },
+});
+
+app.addEventListener('click', ev => {
+  const el = ev.target.closest('[data-act]');
+  if (!el) return;
+  if (el.dataset.act === 'teacher-toggle') return;
+  const fn = actions[el.dataset.act];
+  if (!fn) return;
+  if (!['start','mute','notebook','close-notebook','close-notebook-bg'].includes(el.dataset.act) && !el.dataset.act.startsWith('ed-') && el.dataset.act !== 'import-code' && el.dataset.act !== 'editor') state.msg = null;
+  fn(el, ev);
+});
+app.addEventListener('dblclick', ev => {
+  const el = ev.target.closest('[data-act="teacher-toggle"]');
+  if (el) actions['teacher-toggle']();
+});
+app.addEventListener('change', ev => {
+  const edSel = ev.target.closest('select[data-ed]');
+  if (edSel){
+    const ed = ED[ED.tab], i = Number(edSel.dataset.ed), f = edSel.dataset.f, r = ed.rows[i];
+    if (r){
+      r[f] = edSel.value;
+      if (f === 'mean'){ const d = edSel.value ? defaultsFor(edSel.value, r.w) : { func:'', form:'' }; r.func = d.func; r.form = d.form; }
+      render();
+    }
+    return;
+  }
+  const sel = ev.target.closest('select[data-tbl]');
+  if (!sel) return;
+  const i = Number(sel.dataset.tbl), f = sel.dataset.f;
+  state.scan.table[i] = state.scan.table[i] || {};
+  state.scan.table[i][f] = sel.value;
+  sel.classList.remove('bad');
+});
+app.addEventListener('input', ev => {
+  const id = ev.target.id;
+  if (id === 'notes') state.notes = ev.target.value;
+  else if (id === 'ed-text') ED[ED.tab].draft = ev.target.value;
+  else if (id === 'savename') ED.saveName = ev.target.value;
+  else if (id === 'codein' || id === 'codein-ed') ED.codeIn = ev.target.value;
+});
+app.addEventListener('keydown', ev => {
+  if (ev.key === 'Enter' && ev.target.id === 'team') actions.start();
+  if (ev.key === 'Enter' && ev.target.id === 'ed-text') actions['ed-apply-text']();
+});
+document.addEventListener('keydown', ev => {
+  if (ev.key === 'Escape' && state.notebook){ state.notebook = false; render(); }
+});
+
+render();
+</script>
+</body>
+</html>
